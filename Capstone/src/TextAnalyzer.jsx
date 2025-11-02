@@ -139,7 +139,9 @@ Provide friendly, actionable suggestions to improve mood or overcome stress in 5
             setSuggestions(geminiRes.text || "No suggestions available.");
         } catch (error) {
             console.error("Error:", error);
-            alert("Failed to analyze text or fetch suggestions.");
+            alert(
+                "Dont leave the page,Try Once More! .It may take some time to respond ,At the next attempt definitely it will work."
+            );
         } finally {
             setLoading(false);
         }
