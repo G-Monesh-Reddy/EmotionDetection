@@ -80,7 +80,7 @@ export default function TextAnalyzer() {
 
     // Initialize Gemini AI client
     const ai = new GoogleGenAI({
-        apiKey: "AIzaSyCEJHG6mjmcM-POH_yJAyQjrxzTcuQhhYE", // replace with your key
+        apiKey: import.meta.env.VITE_GEMINI_API_KEY, // replace with your key
     });
 
     const handleAnalyze = async () => {
@@ -233,7 +233,7 @@ Provide friendly, actionable suggestions to improve mood or overcome stress in 5
                 {suggestions && (
                     <div className="mt-6 bg-gradient-to-r from-white/10 to-white/5 p-4 rounded-xl shadow-md border border-white/20 animate-fade-in-scale">
                         <h2 className="text-lg font-semibold text-gray-300 mb-2">
-                            Gemini Suggestions:
+                            Suggestions:
                         </h2>
                         <p className="text-gray-200 whitespace-pre-line">
                             {suggestions}
