@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from "react";
-import { GoogleGenAI } from "@google/genai";
 
 /* -------------------- LABEL MAPPINGS -------------------- */
 
@@ -76,22 +75,15 @@ export default function TextAnalyzer() {
     const [text, setText] = useState("");
     const [emotion, setEmotion] = useState("");
     const [stress, setStress] = useState("");
-    const [suggestions, setSuggestions] = useState("");
     const [loading, setLoading] = useState(false);
     const [status, setStatus] = useState("");
 
-    const ai = new GoogleGenAI({
-        apiKey: import.meta.env.VITE_GEMINI_API_KEY,
-    });
-
-    /* -------- Pre-warm HuggingFace on load -------- */
+    /* -------- Pre-warm HuggingFace -------- */
     useEffect(() => {
         fetch("https://moneshreddy-text-emotion-stress-api.hf.space/").catch(
             () => {},
         );
     }, []);
-
-    /* -------------------- MAIN ANALYSIS -------------------- */
 
     const handleAnalyze = async () => {
         if (!text.trim()) return;
@@ -99,11 +91,10 @@ export default function TextAnalyzer() {
         setLoading(true);
         setEmotion("");
         setStress("");
-        setSuggestions("");
         setStatus("Connecting to AI models (cold start possible)...");
 
         try {
-            /* 1️⃣ Emotion */
+            /* Emotion */
             const emotionRes = await fetch(
                 "https://moneshreddy-text-emotion-stress-api.hf.space/predict_emotion",
                 {
@@ -121,7 +112,7 @@ export default function TextAnalyzer() {
 
             setEmotion(detectedEmotion);
 
-            /* 2️⃣ Stress */
+            /* Stress */
             const stressRes = await fetch(
                 "https://moneshreddy-text-emotion-stress-api.hf.space/predict_stress",
                 {
@@ -139,45 +130,20 @@ export default function TextAnalyzer() {
 
             setStress(detectedStress);
 
-            /* 3️⃣ Gemini only AFTER both */
-            if (detectedEmotion && detectedStress) {
-                setStatus("Generating personalized suggestions...");
-
-                const geminiPrompt = `
-User text: "${text}"
-Detected Emotion: "${detectedEmotion}"
-Detected Stress: "${detectedStress}"
-
-Provide friendly, actionable suggestions to improve mood or overcome stress in 5-6 sentences.
-`;
-
-                const geminiRes = await ai.models.generateContent({
-                    model: "gemini-2.5-flash",
-                    contents: geminiPrompt,
-                });
-
-                setSuggestions(geminiRes.text || "No suggestions available.");
-            }
-
             setStatus("");
         } catch (error) {
             console.error(error);
-            setStatus("");
-            setSuggestions(
-                "⚠️ AI models are waking up or experiencing load. Please try again in a few seconds.",
-            );
+            setStatus("⚠️ Model is waking up or experiencing load. Try again.");
         } finally {
             setLoading(false);
         }
     };
 
-    /* -------------------- UI -------------------- */
-
     return (
-        <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-900 p-4 text-white">
+        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-900 p-4 text-white">
             <div className="bg-white/10 backdrop-blur-xl p-8 rounded-3xl shadow-2xl w-full max-w-2xl border border-white/20">
                 <h1 className="text-3xl font-bold mb-6 text-center bg-gradient-to-r from-purple-400 via-pink-400 to-cyan-400 bg-clip-text text-transparent">
-                    Emotion, Stress & Gemini Suggestions
+                    Emotion & Stress Analyzer
                 </h1>
 
                 <textarea
@@ -207,12 +173,12 @@ Provide friendly, actionable suggestions to improve mood or overcome stress in 5
                 )}
 
                 {(emotion || stress) && (
-                    <div className="mt-6 p-6  bg-white/10 rounded-2xl text-center">
+                    <div className="mt-6 p-6 bg-white/10 rounded-2xl text-center">
                         {emotion && (
-                            <div className="mb-3 ">
+                            <div className="mb-4">
                                 Emotion:
                                 <span
-                                    className={`text-xl font-bold px-2 py-1 rounded-full ${
+                                    className={`ml-3 px-4 py-2 rounded-full ${
                                         emotionColors[emotion.toLowerCase()] ||
                                         "bg-yellow-300/20 text-yellow-300"
                                     }`}
@@ -223,10 +189,10 @@ Provide friendly, actionable suggestions to improve mood or overcome stress in 5
                         )}
 
                         {stress && (
-                            <div className="mt-3">
+                            <div>
                                 Stress Level:
                                 <span
-                                    className={`text-xl font-bold px-4 py-1 rounded-full ${
+                                    className={`ml-3 px-4 py-2 rounded-full ${
                                         stress === "stress"
                                             ? "bg-red-300/20 text-red-300"
                                             : "bg-green-300/20 text-green-300"
@@ -236,13 +202,6 @@ Provide friendly, actionable suggestions to improve mood or overcome stress in 5
                                 </span>
                             </div>
                         )}
-                    </div>
-                )}
-
-                {suggestions && (
-                    <div className="mt-6 p-4 bg-white/10 rounded-xl">
-                        <h2 className="font-semibold mb-2">Suggestions:</h2>
-                        <p className="whitespace-pre-line">{suggestions}</p>
                     </div>
                 )}
             </div>
