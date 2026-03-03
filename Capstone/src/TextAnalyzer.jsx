@@ -1,7 +1,8 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { GoogleGenAI } from "@google/genai";
 
-// Emotion & stress label mapping (your existing mappings)
+/* -------------------- LABEL MAPPINGS -------------------- */
+
 const emotionLabels = {
     LABEL_0: "admiration",
     LABEL_1: "amusement",
@@ -38,10 +39,8 @@ const stressLabels = {
     LABEL_1: "stress",
 };
 
-// Emotion color mapping (your existing mapping)
 const emotionColors = {
     joy: "text-green-400 bg-green-400/20",
-    happiness: "text-green-400 bg-green-400/20",
     excitement: "text-yellow-400 bg-yellow-400/20",
     love: "text-pink-400 bg-pink-400/20",
     gratitude: "text-emerald-400 bg-emerald-400/20",
@@ -71,59 +70,80 @@ const emotionColors = {
     realization: "text-blue-300 bg-blue-300/20",
 };
 
+/* -------------------- COMPONENT -------------------- */
+
 export default function TextAnalyzer() {
     const [text, setText] = useState("");
     const [emotion, setEmotion] = useState("");
     const [stress, setStress] = useState("");
     const [suggestions, setSuggestions] = useState("");
     const [loading, setLoading] = useState(false);
+    const [status, setStatus] = useState("");
 
-    // Initialize Gemini AI client
     const ai = new GoogleGenAI({
-        apiKey: import.meta.env.VITE_GEMINI_API_KEY, // replace with your key
+        apiKey: import.meta.env.VITE_GEMINI_API_KEY,
     });
+
+    /* -------- Pre-warm HuggingFace on load -------- */
+    useEffect(() => {
+        fetch("https://moneshreddy-text-emotion-stress-api.hf.space/").catch(
+            () => {},
+        );
+    }, []);
+
+    /* -------------------- MAIN ANALYSIS -------------------- */
 
     const handleAnalyze = async () => {
         if (!text.trim()) return;
+
         setLoading(true);
         setEmotion("");
         setStress("");
         setSuggestions("");
+        setStatus("Connecting to AI models (cold start possible)...");
 
         try {
-            // 1️⃣ Call Emotion & Stress APIs
-            const [emotionRes, stressRes] = await Promise.all([
-                fetch(
-                    "https://moneshreddy-text-emotion-stress-api.hf.space/predict_emotion",
-                    {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ text }),
-                    }
-                ),
-                fetch(
-                    "https://moneshreddy-text-emotion-stress-api.hf.space/predict_stress",
-                    {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ text }),
-                    }
-                ),
-            ]);
+            /* 1️⃣ Emotion */
+            const emotionRes = await fetch(
+                "https://moneshreddy-text-emotion-stress-api.hf.space/predict_emotion",
+                {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ text }),
+                },
+            );
+
+            if (!emotionRes.ok) throw new Error("Emotion API failed");
 
             const emotionData = await emotionRes.json();
-            const stressData = await stressRes.json();
-
             const detectedEmotion =
                 emotionLabels[emotionData.emotion] || emotionData.emotion;
+
+            setEmotion(detectedEmotion);
+
+            /* 2️⃣ Stress */
+            const stressRes = await fetch(
+                "https://moneshreddy-text-emotion-stress-api.hf.space/predict_stress",
+                {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ text }),
+                },
+            );
+
+            if (!stressRes.ok) throw new Error("Stress API failed");
+
+            const stressData = await stressRes.json();
             const detectedStress =
                 stressLabels[stressData.stress_level] || stressData.stress;
 
-            setEmotion(detectedEmotion);
             setStress(detectedStress);
 
-            // 2️⃣ Call Gemini API with context
-            const geminiPrompt = `
+            /* 3️⃣ Gemini only AFTER both */
+            if (detectedEmotion && detectedStress) {
+                setStatus("Generating personalized suggestions...");
+
+                const geminiPrompt = `
 User text: "${text}"
 Detected Emotion: "${detectedEmotion}"
 Detected Stress: "${detectedStress}"
@@ -131,113 +151,98 @@ Detected Stress: "${detectedStress}"
 Provide friendly, actionable suggestions to improve mood or overcome stress in 5-6 sentences.
 `;
 
-            const geminiRes = await ai.models.generateContent({
-                model: "gemini-2.5-flash",
-                contents: geminiPrompt,
-            });
+                const geminiRes = await ai.models.generateContent({
+                    model: "gemini-2.5-flash",
+                    contents: geminiPrompt,
+                });
 
-            setSuggestions(geminiRes.text || "No suggestions available.");
+                setSuggestions(geminiRes.text || "No suggestions available.");
+            }
+
+            setStatus("");
         } catch (error) {
-            console.error("Error:", error);
-            alert(
-                "Dont leave the page,Try Once More! .It may take some time to respond ,At the next attempt definitely it will work."
+            console.error(error);
+            setStatus("");
+            setSuggestions(
+                "⚠️ AI models are waking up or experiencing load. Please try again in a few seconds.",
             );
         } finally {
             setLoading(false);
         }
     };
 
+    /* -------------------- UI -------------------- */
+
     return (
-        <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-900 p-4 sm:p-6 text-white">
-            <div className="bg-white/10 backdrop-blur-xl p-6 sm:p-8 rounded-3xl shadow-2xl w-full max-w-2xl border border-white/20 animate-fade-in-up">
-                <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-8 text-center bg-gradient-to-r from-purple-400 via-pink-400 to-cyan-400 bg-clip-text text-transparent animate-fade-in-scale">
+        <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-900 p-4 text-white">
+            <div className="bg-white/10 backdrop-blur-xl p-8 rounded-3xl shadow-2xl w-full max-w-2xl border border-white/20">
+                <h1 className="text-3xl font-bold mb-6 text-center bg-gradient-to-r from-purple-400 via-pink-400 to-cyan-400 bg-clip-text text-transparent">
                     Emotion, Stress & Gemini Suggestions
                 </h1>
 
-                <div className="space-y-6 animate-fade-in-up-delayed">
-                    <div className="relative">
-                        <textarea
-                            value={text}
-                            onChange={(e) => setText(e.target.value)}
-                            rows="6"
-                            placeholder="Type or paste your text here..."
-                            className="w-full p-4 bg-black/20 text-white rounded-xl border border-gray-600 focus:ring-2 focus:ring-purple-400 focus:border-purple-400 outline-none resize-none transition-all duration-300 placeholder-gray-400"
-                        />
-                        <div className="absolute bottom-2 right-2 text-xs text-gray-400">
-                            {text.length} characters
-                        </div>
-                    </div>
+                <textarea
+                    value={text}
+                    onChange={(e) => setText(e.target.value)}
+                    rows="6"
+                    placeholder="Type your thoughts here..."
+                    className="w-full p-4 bg-black/20 rounded-xl border border-gray-600 focus:ring-2 focus:ring-purple-400 outline-none resize-none"
+                />
 
-                    <button
-                        onClick={handleAnalyze}
-                        disabled={loading || !text.trim()}
-                        className={`w-full py-4 px-6 rounded-xl font-semibold text-lg transition-all duration-300 hover:scale-105 active:scale-95 ${
-                            loading || !text.trim()
-                                ? "bg-gray-600 cursor-not-allowed opacity-50"
-                                : "bg-gradient-to-r from-purple-500 via-pink-500 to-cyan-500 hover:from-purple-600 hover:via-pink-600 hover:to-cyan-600 shadow-lg hover:shadow-xl"
-                        }`}
-                    >
-                        {loading ? (
-                            <div className="flex items-center justify-center space-x-2">
-                                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                                <span>Analyzing...</span>
-                            </div>
-                        ) : (
-                            "Analyze Text"
-                        )}
-                    </button>
-                </div>
+                <button
+                    onClick={handleAnalyze}
+                    disabled={loading || !text.trim()}
+                    className={`w-full mt-4 py-3 rounded-xl font-semibold transition ${
+                        loading || !text.trim()
+                            ? "bg-gray-600 opacity-50"
+                            : "bg-gradient-to-r from-purple-500 via-pink-500 to-cyan-500 hover:scale-105"
+                    }`}
+                >
+                    {loading ? "Analyzing..." : "Analyze Text"}
+                </button>
+
+                {status && (
+                    <div className="mt-4 text-sm text-yellow-300 text-center animate-pulse">
+                        {status}
+                    </div>
+                )}
 
                 {(emotion || stress) && (
-                    <div className="mt-8 bg-gradient-to-r from-white/10 to-white/5 p-6 rounded-2xl text-center shadow-xl border border-white/20 animate-fade-in-scale">
-                        <div className="space-y-4">
-                            {emotion && (
-                                <div className="flex items-center justify-center space-x-3 animate-slide-in-left">
-                                    <span className="text-lg font-medium text-gray-300">
-                                        Emotion:
-                                    </span>
-                                    <span
-                                        className={`text-xl font-bold px-4 py-2 rounded-full ${
-                                            emotionColors[
-                                                emotion.toLowerCase()
-                                            ] ||
-                                            "text-yellow-300 bg-yellow-300/20"
-                                        }`}
-                                    >
-                                        {emotion.charAt(0).toUpperCase() +
-                                            emotion.slice(1)}
-                                    </span>
-                                </div>
-                            )}
-                            {stress && (
-                                <div className="flex items-center justify-center space-x-3 animate-slide-in-right">
-                                    <span className="text-lg font-medium text-gray-300">
-                                        Stress Level:
-                                    </span>
-                                    <span
-                                        className={`text-xl font-bold px-4 py-2 rounded-full ${
-                                            stress === "stress"
-                                                ? "text-red-300 bg-red-300/20"
-                                                : "text-green-300 bg-green-300/20"
-                                        }`}
-                                    >
-                                        {stress.charAt(0).toUpperCase() +
-                                            stress.slice(1)}
-                                    </span>
-                                </div>
-                            )}
-                        </div>
+                    <div className="mt-6 p-6  bg-white/10 rounded-2xl text-center">
+                        {emotion && (
+                            <div className="mb-3 ">
+                                Emotion:
+                                <span
+                                    className={`text-xl font-bold px-2 py-1 rounded-full ${
+                                        emotionColors[emotion.toLowerCase()] ||
+                                        "bg-yellow-300/20 text-yellow-300"
+                                    }`}
+                                >
+                                    {emotion}
+                                </span>
+                            </div>
+                        )}
+
+                        {stress && (
+                            <div className="mt-3">
+                                Stress Level:
+                                <span
+                                    className={`text-xl font-bold px-4 py-1 rounded-full ${
+                                        stress === "stress"
+                                            ? "bg-red-300/20 text-red-300"
+                                            : "bg-green-300/20 text-green-300"
+                                    }`}
+                                >
+                                    {stress}
+                                </span>
+                            </div>
+                        )}
                     </div>
                 )}
 
                 {suggestions && (
-                    <div className="mt-6 bg-gradient-to-r from-white/10 to-white/5 p-4 rounded-xl shadow-md border border-white/20 animate-fade-in-scale">
-                        <h2 className="text-lg font-semibold text-gray-300 mb-2">
-                            Suggestions:
-                        </h2>
-                        <p className="text-gray-200 whitespace-pre-line">
-                            {suggestions}
-                        </p>
+                    <div className="mt-6 p-4 bg-white/10 rounded-xl">
+                        <h2 className="font-semibold mb-2">Suggestions:</h2>
+                        <p className="whitespace-pre-line">{suggestions}</p>
                     </div>
                 )}
             </div>
